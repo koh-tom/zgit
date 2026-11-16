@@ -24,6 +24,7 @@ const commands = [_]Command{
     command("ls-files", @import("cmd/ls_files.zig")),
     command("add", @import("cmd/add.zig")),
     command("commit", @import("cmd/commit.zig")),
+    command("inspect", @import("cmd/inspect.zig")),
     .{ .name = "version", .usage = "zgit version", .run = runVersion },
 };
 

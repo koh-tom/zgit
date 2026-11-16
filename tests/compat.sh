@@ -199,7 +199,37 @@ ch10() {
     fsck_clean
 }
 
-chapters=(03 04 05 06 07 08 09 10)
+ch11() {
+    fresh ch11
+    git init -q -b main .
+    printf 'hello\n' > hello.txt
+    mkdir src && printf 'const x = 1;\n' > src/main.zig
+    git add . && git commit -q -m "first commit"
+    printf 'changed\n' > hello.txt && git add . && git commit -q -m "second"
+
+    tree=$("$zgit" inspect HEAD)
+    eq "$(echo "$tree" | head -1)" "HEAD -> refs/heads/main" "inspect starts from HEAD"
+    eq "$(echo "$tree" | grep -c 'blob ')" 2 "inspect reaches every blob"
+    eq "$(echo "$tree" | grep -c 'parent ')" 1 "inspect shows the parent"
+    size=$(git cat-file -s HEAD)
+    header=$(( 7 + ${#size} + 1 ))   # "commit <size>\0"
+    eq "$("$zgit" inspect --raw HEAD | sed -n 4p)" "inflated $(( size + header )) bytes = header $header + commit $size" "inspect --raw explains the header"
+    eq "$("$zgit" inspect --raw HEAD | sed -n 6p | cut -c1-8)" "00000000" "inspect --raw dumps bytes"
+    eq "$("$zgit" inspect index | head -1 | cut -d, -f2-)" " version 2, 2 entries, checksum ok" "inspect index reads the header"
+    eq "$("$zgit" inspect index | tail -1 | cut -d'(' -f1)" "extensions:  TREE " "inspect index lists extensions"
+
+    # pack しか無いリポジトリは読めないが、unpack-objects で loose に戻せば読める
+    git repack -a -d -q
+    "$zgit" log >/dev/null 2>&1 && fail "zgit should not read packfiles yet"
+    ok "packed objects are out of reach (as expected)"
+    pack=$(ls .git/objects/pack/*.pack)
+    mv "$pack" "$work/ch11.pack"
+    git unpack-objects -q < "$work/ch11.pack"
+    eq "$("$zgit" log --oneline)" "$(git log --oneline)" "zgit log works again after unpack-objects"
+    fsck_clean
+}
+
+chapters=(03 04 05 06 07 08 09 10 11)
 if [ $# -gt 0 ]; then chapters=("$@"); fi
 for c in "${chapters[@]}"; do
     echo "# chapter $c"

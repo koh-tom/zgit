@@ -18,6 +18,10 @@ const version: u32 = 2;
 const entry_fixed_len = 62;
 
 entries: std.ArrayList(Entry),
+/// 読んだファイルの version。書くときは常に 2
+file_version: u32 = version,
+/// 読み飛ばした拡張。inspect で見せるためだけに覚えておく
+extensions: std.ArrayList(Extension) = .empty,
 /// path 文字列の置き場。読んだものと add で作ったものが混ざるので、寿命を一つにまとめる
 arena: std.heap.ArenaAllocator,
 
@@ -75,6 +79,11 @@ fn low32(x: u64) u32 {
     return @truncate(x);
 }
 
+pub const Extension = struct {
+    signature: [4]u8,
+    size: u32,
+};
+
 pub const Error = error{ CorruptIndex, UnsupportedIndexVersion, ChecksumMismatch };
 
 pub fn init(allocator: Allocator) Index {
@@ -83,6 +92,7 @@ pub fn init(allocator: Allocator) Index {
 
 pub fn deinit(self: *Index) void {
     self.entries.deinit(self.arena.child_allocator);
+    self.extensions.deinit(self.arena.child_allocator);
     self.arena.deinit();
     self.* = undefined;
 }
@@ -109,8 +119,8 @@ pub fn parse(self: *Index, buf: []const u8) !void {
 
     var r: std.Io.Reader = .fixed(body);
     if (!std.mem.eql(u8, try r.take(4), signature)) return error.CorruptIndex;
-    const file_version = try r.takeInt(u32, .big);
-    if (file_version != 2 and file_version != 3) return error.UnsupportedIndexVersion;
+    self.file_version = try r.takeInt(u32, .big);
+    if (self.file_version != 2 and self.file_version != 3) return error.UnsupportedIndexVersion;
     const count = try r.takeInt(u32, .big);
 
     try self.entries.ensureTotalCapacity(self.arena.child_allocator, count);
@@ -141,7 +151,15 @@ pub fn parse(self: *Index, buf: []const u8) !void {
         try r.discardAll((8 - used % 8) % 8);
         self.entries.appendAssumeCapacity(e);
     }
-    // 以降は拡張 (TREE など)。使わないので読まない
+    // 以降は拡張 (TREE など)。署名と長さだけ控えて中身は読み飛ばす
+    while (r.seek < body.len) {
+        const ext = Extension{
+            .signature = (try r.takeArray(4)).*,
+            .size = try r.takeInt(u32, .big),
+        };
+        try r.discardAll(ext.size);
+        try self.extensions.append(self.arena.child_allocator, ext);
+    }
 }
 
 /// `.git/index` に書く。index.lock に書いてから rename するので、途中で止まっても index は壊れない

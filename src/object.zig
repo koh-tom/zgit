@@ -1,7 +1,10 @@
 //! Git オブジェクトに共通する部分。種類と、ハッシュの計算。
 
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 const Oid = @import("Oid.zig");
+const Tree = @import("Tree.zig");
+const Commit = @import("Commit.zig");
 
 pub const Type = enum {
     blob,
@@ -22,6 +25,33 @@ pub const Type = enum {
 pub fn writeHeader(w: *std.Io.Writer, kind: Type, size: usize) std.Io.Writer.Error!void {
     try w.print("{s} {d}\x00", .{ kind.name(), size });
 }
+
+/// 解析済みのオブジェクト。4 種類のどれか 1 つ
+pub const Object = union(Type) {
+    blob: []const u8,
+    tree: Tree,
+    commit: Commit,
+    /// annotated tag。本書では作らないので中身はテキストのまま
+    tag: []const u8,
+
+    /// `body` を種類に応じて解析する。tree / commit の文字列は `body` の中を指す
+    pub fn parse(allocator: Allocator, kind: Type, body: []const u8) !Object {
+        return switch (kind) {
+            .blob => .{ .blob = body },
+            .tree => .{ .tree = try Tree.parse(allocator, body) },
+            .commit => .{ .commit = try Commit.parse(allocator, body) },
+            .tag => .{ .tag = body },
+        };
+    }
+
+    pub fn deinit(self: *Object, allocator: Allocator) void {
+        switch (self.*) {
+            .tree => |*t| t.deinit(allocator),
+            .commit => |*c| c.deinit(allocator),
+            .blob, .tag => {},
+        }
+    }
+};
 
 pub const Header = struct {
     kind: Type,
