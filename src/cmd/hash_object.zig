@@ -2,17 +2,21 @@ const std = @import("std");
 const Io = std.Io;
 const cli = @import("../cli.zig");
 const object = @import("../object.zig");
+const odb = @import("../odb.zig");
 
-pub const usage = "zgit hash-object [--stdin] [<file>]";
+pub const usage = "zgit hash-object [-w] [--stdin] [<file>]";
 
 const max_file_size = 1 << 30;
 
 pub fn run(ctx: cli.Context, args: []const []const u8) !void {
     var path: ?[]const u8 = null;
     var use_stdin = false;
+    var write = false;
     for (args) |arg| {
         if (std.mem.eql(u8, arg, "--stdin")) {
             use_stdin = true;
+        } else if (std.mem.eql(u8, arg, "-w")) {
+            write = true;
         } else {
             path = arg;
         }
@@ -26,7 +30,13 @@ pub fn run(ctx: cli.Context, args: []const []const u8) !void {
         return error.Usage;
     defer ctx.allocator.free(data);
 
-    try ctx.out.print("{f}\n", .{object.hash(.blob, data)});
+    if (write) {
+        var repo = try ctx.openRepo();
+        defer repo.close(ctx.allocator);
+        try ctx.out.print("{f}\n", .{try odb.write(repo, .blob, data)});
+    } else {
+        try ctx.out.print("{f}\n", .{object.hash(.blob, data)});
+    }
 }
 
 fn readStdin(ctx: cli.Context) ![]u8 {

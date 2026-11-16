@@ -23,6 +23,26 @@ pub fn writeHeader(w: *std.Io.Writer, kind: Type, size: usize) std.Io.Writer.Err
     try w.print("{s} {d}\x00", .{ kind.name(), size });
 }
 
+pub const Header = struct {
+    kind: Type,
+    size: usize,
+    /// ヘッダの長さ。本体は buf[header_len..]
+    header_len: usize,
+};
+
+pub const HeaderError = error{ CorruptObject, UnknownObjectType };
+
+/// 展開済みオブジェクトの先頭 "<type> <size>\0" を読む
+pub fn parseHeader(buf: []const u8) HeaderError!Header {
+    const end = std.mem.indexOfScalar(u8, buf[0..@min(buf.len, 32)], 0) orelse
+        return error.CorruptObject;
+    const space = std.mem.indexOfScalar(u8, buf[0..end], ' ') orelse return error.CorruptObject;
+    const kind = Type.parse(buf[0..space]) orelse return error.UnknownObjectType;
+    const size = std.fmt.parseInt(usize, buf[space + 1 .. end], 10) catch
+        return error.CorruptObject;
+    return .{ .kind = kind, .size = size, .header_len = end + 1 };
+}
+
 /// ヘッダ付きの内容全体を SHA-1 にかける。中身が同じなら同じ ID になる
 pub fn hash(kind: Type, data: []const u8) Oid {
     var header_buf: [32]u8 = undefined;
@@ -46,6 +66,17 @@ test "blob hash matches git hash-object" {
     // 空の blob。Git を使っていると時々見かける ID
     const empty = hash(.blob, "");
     try std.testing.expectFmt("e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "{f}", .{empty});
+}
+
+test "parse header" {
+    const h = try parseHeader("blob 6\x00hello\n");
+    try std.testing.expectEqual(Type.blob, h.kind);
+    try std.testing.expectEqual(6, h.size);
+    try std.testing.expectEqual(7, h.header_len);
+
+    try std.testing.expectError(error.UnknownObjectType, parseHeader("blobby 6\x00"));
+    try std.testing.expectError(error.CorruptObject, parseHeader("blob six\x00"));
+    try std.testing.expectError(error.CorruptObject, parseHeader("blob 6 hello"));
 }
 
 test "type names round trip" {

@@ -13,6 +13,7 @@ const Command = struct {
 const commands = [_]Command{
     command("init", @import("cmd/init.zig")),
     command("hash-object", @import("cmd/hash_object.zig")),
+    command("cat-file", @import("cmd/cat_file.zig")),
     .{ .name = "version", .usage = "zgit version", .run = runVersion },
 };
 
@@ -49,17 +50,26 @@ pub fn main(init: std.process.Init) u8 {
     cmd.run(ctx, args[2..]) catch |err| {
         out.flush() catch {};
         switch (err) {
+            error.Fatal => {},
             // `zgit log | head` のように出力先が先に閉じた。git と同じく黙って終わる
             error.WriteFailed => return 141,
             error.Usage => {
                 std.debug.print("usage: {s}\n", .{cmd.usage});
                 return 129;
             },
-            else => std.debug.print("fatal: {s}\n", .{@errorName(err)}),
+            else => std.debug.print("fatal: {s}\n", .{describe(err)}),
         }
         return 128;
     };
     return 0;
+}
+
+/// エラーを git と同じ調子の文言にする。知らないものは名前をそのまま出す
+fn describe(err: anyerror) []const u8 {
+    return switch (err) {
+        error.NotARepository => "not a git repository (or any of the parent directories): .git",
+        else => @errorName(err),
+    };
 }
 
 fn findCommand(name: []const u8) ?Command {

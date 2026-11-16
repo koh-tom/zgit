@@ -94,6 +94,15 @@ fn openAt(
     };
 }
 
+/// `.git` の下のファイルを丸ごと読む。無ければ null。返した buffer は呼び出し側が free する
+pub fn readFile(self: Repository, allocator: Allocator, path: []const u8) !?[]u8 {
+    const result = self.git_dir.readFileAlloc(self.io, path, allocator, .limited(1 << 30));
+    return result catch |err| switch (err) {
+        error.FileNotFound => null,
+        else => err,
+    };
+}
+
 pub fn close(self: *Repository, allocator: Allocator) void {
     self.git_dir.close(self.io);
     self.work_dir.close(self.io);

@@ -41,7 +41,23 @@ ch04() {
     eq "$("$zgit" hash-object big.bin)" "$(git hash-object big.bin)" "hash-object agrees on binary"
 }
 
-chapters=(03 04)
+ch05() {
+    fresh ch05
+    git init -q -b main .
+    printf 'hello\n' > hello.txt
+    oid=$("$zgit" hash-object -w hello.txt)
+    eq "$(git cat-file -t "$oid")" blob "git reads type of zgit blob"
+    eq "$(git cat-file -p "$oid")" hello "git reads content of zgit blob"
+
+    printf 'from git\n' > g.txt
+    oid=$(git hash-object -w g.txt)
+    eq "$("$zgit" cat-file -t "$oid")" blob "zgit reads type of git blob"
+    eq "$("$zgit" cat-file -s "$oid")" 9 "zgit reads size of git blob"
+    eq "$("$zgit" cat-file -p "$oid")" "from git" "zgit reads content of git blob"
+    fsck_clean
+}
+
+chapters=(03 04 05)
 if [ $# -gt 0 ]; then chapters=("$@"); fi
 for c in "${chapters[@]}"; do
     echo "# chapter $c"
