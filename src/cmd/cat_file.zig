@@ -1,7 +1,9 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const Oid = @import("../Oid.zig");
+const Tree = @import("../Tree.zig");
 const odb = @import("../odb.zig");
+const ls_tree = @import("ls_tree.zig");
 
 pub const usage = "zgit cat-file (-t | -s | -p) <object>";
 
@@ -26,7 +28,15 @@ pub fn run(ctx: cli.Context, args: []const []const u8) !void {
     } else if (std.mem.eql(u8, mode, "-s")) {
         try ctx.out.print("{d}\n", .{loaded.body.len});
     } else if (std.mem.eql(u8, mode, "-p")) {
-        try ctx.out.writeAll(loaded.body);
+        switch (loaded.kind) {
+            // tree だけはバイナリなので、ls-tree と同じ形で見せる
+            .tree => {
+                var tree = try Tree.parse(ctx.allocator, loaded.body);
+                defer tree.deinit(ctx.allocator);
+                for (tree.entries) |e| try ls_tree.printEntry(ctx.out, e, "");
+            },
+            else => try ctx.out.writeAll(loaded.body),
+        }
     } else {
         return error.Usage;
     }

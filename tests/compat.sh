@@ -57,7 +57,27 @@ ch05() {
     fsck_clean
 }
 
-chapters=(03 04 05)
+ch06() {
+    fresh ch06
+    git init -q -b main .
+    mkdir -p src/deep
+    printf 'hello\n' > hello.txt
+    printf 'const x = 1;\n' > src/main.zig
+    printf 'deep\n' > src/deep/d.txt
+    printf '#!/bin/sh\n' > run.sh && chmod +x run.sh
+    ln -s hello.txt link
+    mkdir empty
+
+    git add -A
+    tree=$("$zgit" write-tree)
+    eq "$tree" "$(git write-tree)" "write-tree agrees with git (nested, exec bit, symlink, empty dir)"
+    eq "$("$zgit" ls-tree "$tree")" "$(git ls-tree "$tree")" "ls-tree agrees"
+    eq "$("$zgit" ls-tree -r "$tree")" "$(git ls-tree -r "$tree")" "ls-tree -r agrees"
+    eq "$("$zgit" cat-file -p "$tree")" "$(git cat-file -p "$tree")" "cat-file -p on a tree agrees"
+    fsck_clean
+}
+
+chapters=(03 04 05 06)
 if [ $# -gt 0 ]; then chapters=("$@"); fi
 for c in "${chapters[@]}"; do
     echo "# chapter $c"

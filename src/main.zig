@@ -14,6 +14,8 @@ const commands = [_]Command{
     command("init", @import("cmd/init.zig")),
     command("hash-object", @import("cmd/hash_object.zig")),
     command("cat-file", @import("cmd/cat_file.zig")),
+    command("ls-tree", @import("cmd/ls_tree.zig")),
+    command("write-tree", @import("cmd/write_tree.zig")),
     .{ .name = "version", .usage = "zgit version", .run = runVersion },
 };
 
