@@ -11,6 +11,7 @@ const Command = struct {
 };
 
 const commands = [_]Command{
+    command("init", @import("cmd/init.zig")),
     .{ .name = "version", .usage = "zgit version", .run = runVersion },
 };
 
