@@ -4,6 +4,7 @@ const Oid = @import("../Oid.zig");
 const Commit = @import("../Commit.zig");
 const odb = @import("../odb.zig");
 const ident = @import("../ident.zig");
+const revision = @import("../revision.zig");
 
 pub const usage = "zgit commit-tree <tree> [-p <parent>]... -m <message>";
 
@@ -22,16 +23,14 @@ pub fn run(ctx: cli.Context, args: []const []const u8) !void {
         if (std.mem.eql(u8, arg, "-p")) {
             i += 1;
             if (i == args.len) return error.Usage;
-            const parent = Oid.fromHex(args[i]) catch
-                return cli.fatal("Not a valid object name {s}", .{args[i]});
+            const parent = try revision.resolveOrDie(ctx.allocator, repo, args[i]);
             try parents.append(ctx.allocator, parent);
         } else if (std.mem.eql(u8, arg, "-m")) {
             i += 1;
             if (i == args.len) return error.Usage;
             message = args[i];
         } else {
-            tree = Oid.fromHex(arg) catch
-                return cli.fatal("Not a valid object name {s}", .{arg});
+            tree = try revision.resolveOrDie(ctx.allocator, repo, arg);
         }
     }
 

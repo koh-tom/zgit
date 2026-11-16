@@ -36,6 +36,32 @@ pub const Time = struct {
         try self.formatOffset(w);
     }
 
+    /// git log と同じ "Wed Nov 15 07:13:20 2023 +0900"
+    pub fn formatHuman(self: Time, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        const local = self.secs + @as(i64, self.offset_min) * 60;
+        const epoch = std.time.epoch.EpochSeconds{ .secs = @intCast(@max(local, 0)) };
+        const day = epoch.getEpochDay();
+        const year_day = day.calculateYearDay();
+        const month_day = year_day.calculateMonthDay();
+        const clock = epoch.getDaySeconds();
+
+        const weekdays = [_][]const u8{ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+        const months = [_][]const u8{
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        };
+        try w.print("{s} {s} {d} {d:0>2}:{d:0>2}:{d:0>2} {d} ", .{
+            weekdays[(day.day + 4) % 7], // 1970-01-01 は木曜日
+            months[month_day.month.numeric() - 1],
+            month_day.day_index + 1,
+            clock.getHoursIntoDay(),
+            clock.getMinutesIntoHour(),
+            clock.getSecondsIntoMinute(),
+            year_day.year,
+        });
+        try self.formatOffset(w);
+    }
+
     fn formatOffset(self: Time, w: *std.Io.Writer) std.Io.Writer.Error!void {
         const sign: u8 = if (self.offset_min < 0) '-' else '+';
         const abs: u16 = @abs(self.offset_min);
@@ -76,6 +102,11 @@ test "parse and format" {
 
     try std.testing.expectEqual(-330, Time.parse("@1 -0530").?.offset_min);
     try std.testing.expectFmt("1 -0530", "{f}", .{Time.parse("@1 -0530").?});
+    var out: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer out.deinit();
+    try t.formatHuman(&out.writer);
+    try std.testing.expectEqualStrings("Wed Nov 15 07:13:20 2023 +0900", out.written());
+
     try std.testing.expectEqual(null, Time.parse("yesterday"));
     try std.testing.expectEqual(null, Time.parse("1700000000 +9"));
 }

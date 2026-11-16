@@ -17,6 +17,10 @@ const commands = [_]Command{
     command("ls-tree", @import("cmd/ls_tree.zig")),
     command("write-tree", @import("cmd/write_tree.zig")),
     command("commit-tree", @import("cmd/commit_tree.zig")),
+    command("update-ref", @import("cmd/update_ref.zig")),
+    command("rev-parse", @import("cmd/rev_parse.zig")),
+    command("branch", @import("cmd/branch.zig")),
+    command("log", @import("cmd/log.zig")),
     .{ .name = "version", .usage = "zgit version", .run = runVersion },
 };
 

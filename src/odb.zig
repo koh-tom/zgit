@@ -12,6 +12,7 @@ pub const Error = error{
     ObjectNotFound,
     CorruptObject,
     UnknownObjectType,
+    AmbiguousObject,
 };
 
 /// 読み込んだオブジェクト。`body` は `buf` の中を指しているので、free は `buf` に対して一度だけ
@@ -84,6 +85,35 @@ pub fn exists(repo: Repository, oid: Oid) bool {
     return true;
 }
 
+/// 短縮 ID から探す。"ce01" なら objects/ce/ の中で "01" で始まるものを数える
+pub fn findByPrefix(repo: Repository, prefix: []const u8) !?Oid {
+    if (prefix.len < 4 or prefix.len > Oid.hex_len) return null;
+
+    var dir_buf: ["objects/xx".len]u8 = undefined;
+    const dir_path =
+        std.fmt.bufPrint(&dir_buf, "objects/{s}", .{prefix[0..2]}) catch unreachable;
+    const opened = repo.git_dir.openDir(repo.io, dir_path, .{ .iterate = true });
+    var dir = opened catch |err| switch (err) {
+        error.FileNotFound => return null,
+        else => return err,
+    };
+    defer dir.close(repo.io);
+
+    var found: ?Oid = null;
+    var it = dir.iterate();
+    while (try it.next(repo.io)) |entry| {
+        // オブジェクト以外のファイル (一時ファイルなど) は長さが違うので飛ばす
+        if (entry.name.len != Oid.hex_len - 2) continue;
+        if (!std.mem.startsWith(u8, entry.name, prefix[2..])) continue;
+        if (found != null) return error.AmbiguousObject;
+        var hex: [Oid.hex_len]u8 = undefined;
+        @memcpy(hex[0..2], prefix[0..2]);
+        @memcpy(hex[2..], entry.name);
+        found = Oid.fromHex(&hex) catch continue;
+    }
+    return found;
+}
+
 /// "objects/ce/013625030ba8dba906f756967f9e9ca394464a" の形にする
 fn objectPath(buf: *[64]u8, oid: Oid) []const u8 {
     const hex = oid.toHex();
@@ -108,6 +138,9 @@ test "write then read" {
 
     // 二度書いても壊れない (読み取り専用ファイルを上書きしようとしない)
     _ = try write(repo, .blob, "hello\n");
+
+    try std.testing.expect(oid.eql((try findByPrefix(repo, "ce0136")).?));
+    try std.testing.expectEqual(null, try findByPrefix(repo, "ffff"));
 
     const missing = Oid.fromHex("0000000000000000000000000000000000000000") catch unreachable;
     try std.testing.expectError(error.ObjectNotFound, read(allocator, repo, missing));

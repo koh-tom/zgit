@@ -1,8 +1,8 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
-const Oid = @import("../Oid.zig");
 const Tree = @import("../Tree.zig");
 const odb = @import("../odb.zig");
+const revision = @import("../revision.zig");
 const ls_tree = @import("ls_tree.zig");
 
 pub const usage = "zgit cat-file (-t | -s | -p) <object>";
@@ -15,8 +15,7 @@ pub fn run(ctx: cli.Context, args: []const []const u8) !void {
     var repo = try ctx.openRepo();
     defer repo.close(ctx.allocator);
 
-    const oid = Oid.fromHex(name) catch
-        return cli.fatal("Not a valid object name {s}", .{name});
+    const oid = try revision.resolveOrDie(ctx.allocator, repo, name);
     const loaded = odb.read(ctx.allocator, repo, oid) catch |err| switch (err) {
         error.ObjectNotFound => return cli.fatal("Not a valid object name {s}", .{name}),
         else => return err,

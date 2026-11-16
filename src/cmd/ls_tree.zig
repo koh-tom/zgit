@@ -7,6 +7,7 @@ const Oid = @import("../Oid.zig");
 const Tree = @import("../Tree.zig");
 const Commit = @import("../Commit.zig");
 const odb = @import("../odb.zig");
+const revision = @import("../revision.zig");
 
 pub const usage = "zgit ls-tree [-r] <tree-ish>";
 
@@ -21,8 +22,7 @@ pub fn run(ctx: cli.Context, args: []const []const u8) !void {
     var repo = try ctx.openRepo();
     defer repo.close(ctx.allocator);
 
-    const oid = Oid.fromHex(target) catch
-        return cli.fatal("Not a valid object name {s}", .{target});
+    const oid = try revision.resolveOrDie(ctx.allocator, repo, target);
     try list(ctx.allocator, ctx.out, repo, oid, "", recursive);
 }
 

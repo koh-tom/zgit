@@ -98,7 +98,40 @@ ch07() {
     fsck_clean
 }
 
-chapters=(03 04 05 06 07)
+ch08() {
+    fresh ch08
+    "$zgit" init >/dev/null
+    printf 'a\n' > a.txt
+    git add a.txt
+    tree=$("$zgit" write-tree)
+    c1=$("$zgit" commit-tree "$tree" -m "first")
+    "$zgit" update-ref HEAD "$c1"
+    eq "$(cat .git/refs/heads/main)" "$c1" "update-ref HEAD writes the branch file"
+    eq "$(git rev-parse HEAD)" "$c1" "git resolves HEAD written by zgit"
+
+    printf 'b\n' > b.txt
+    git add b.txt
+    tree=$("$zgit" write-tree)
+    c2=$(GIT_AUTHOR_DATE="1700000100 +0900" GIT_COMMITTER_DATE="1700000100 +0900" \
+        "$zgit" commit-tree "$tree" -p HEAD -m "$(printf 'second\n\nwith body')")
+    "$zgit" update-ref HEAD "$c2"
+    eq "$("$zgit" rev-parse HEAD main refs/heads/main "${c2:0:7}")" "$(git rev-parse HEAD main refs/heads/main "${c2:0:7}")" "rev-parse agrees"
+    eq "$("$zgit" log)" "$(git log)" "log agrees"
+    eq "$("$zgit" log --oneline)" "$(git log --oneline)" "log --oneline agrees"
+    eq "$("$zgit" cat-file -p HEAD)" "$(git cat-file -p HEAD)" "cat-file accepts HEAD"
+
+    "$zgit" branch dev
+    eq "$("$zgit" branch)" "$(git branch)" "branch listing agrees"
+    eq "$(git rev-parse dev)" "$c2" "git sees the branch zgit created"
+    git pack-refs --all
+    eq "$("$zgit" rev-parse dev)" "$c2" "zgit reads packed-refs"
+    eq "$("$zgit" branch)" "$(git branch)" "branch listing agrees after pack-refs"
+    eq "$(git reflog | wc -l)" 2 "reflog has both updates"
+    eq "$(sed -n 2p .git/logs/HEAD | cut -d' ' -f1,2)" "$c1 $c2" "reflog records old and new ids"
+    fsck_clean
+}
+
+chapters=(03 04 05 06 07 08)
 if [ $# -gt 0 ]; then chapters=("$@"); fi
 for c in "${chapters[@]}"; do
     echo "# chapter $c"
