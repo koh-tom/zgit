@@ -166,7 +166,40 @@ ch09() {
     fsck_clean
 }
 
-chapters=(03 04 05 06 07 08 09)
+ch10() {
+    fresh ch10
+    "$zgit" init >/dev/null
+    printf 'hello\n' > hello.txt
+    mkdir src && printf 'const x = 1;\n' > src/main.zig
+    "$zgit" add .
+    "$zgit" commit -m "first commit" >/dev/null
+    eq "$(git log --oneline)" "$(git rev-parse --short HEAD) first commit" "git log reads the zgit commit"
+    eq "$(git status --porcelain)" "" "git status is clean after zgit commit"
+
+    # 同じ内容・同じ日時なら git が作る commit と ID まで一致する
+    git_id=$(cd "$work" && rm -rf ch10-git && mkdir ch10-git && cd ch10-git && git init -q -b main . &&
+        printf 'hello\n' > hello.txt && mkdir src && printf 'const x = 1;\n' > src/main.zig &&
+        git add . && git commit -q -m "first commit" && git rev-parse HEAD)
+    eq "$(git rev-parse HEAD)" "$git_id" "commit id is identical to git's"
+
+    printf 'changed\n' > hello.txt
+    "$zgit" add hello.txt
+    GIT_AUTHOR_DATE="1700000100 +0900" GIT_COMMITTER_DATE="1700000100 +0900" "$zgit" commit -m "second" >/dev/null
+    eq "$("$zgit" log)" "$(git log)" "log agrees after two commits"
+    eq "$(git reflog | sed 's/^[0-9a-f]* //')" "$(printf 'HEAD@{0}: commit: second\nHEAD@{1}: commit (initial): first commit')" "reflog matches git's wording"
+
+    git commit -q --allow-empty -m "from git"
+    printf 'third\n' > third.txt
+    "$zgit" add third.txt
+    "$zgit" commit -m "third" >/dev/null
+    eq "$(git log --format=%s)" "$(printf 'third\nfrom git\nsecond\nfirst commit')" "git and zgit commits interleave"
+    eq "$(git cat-file -p HEAD | grep -c '^parent')" 1 "parent is the git commit"
+    "$zgit" commit -m "nothing" 2>/dev/null && fail "commit with no changes should fail"
+    ok "nothing to commit is refused"
+    fsck_clean
+}
+
+chapters=(03 04 05 06 07 08 09 10)
 if [ $# -gt 0 ]; then chapters=("$@"); fi
 for c in "${chapters[@]}"; do
     echo "# chapter $c"

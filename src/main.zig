@@ -23,6 +23,7 @@ const commands = [_]Command{
     command("log", @import("cmd/log.zig")),
     command("ls-files", @import("cmd/ls_files.zig")),
     command("add", @import("cmd/add.zig")),
+    command("commit", @import("cmd/commit.zig")),
     .{ .name = "version", .usage = "zgit version", .run = runVersion },
 };
 

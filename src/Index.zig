@@ -6,6 +6,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Repository = @import("Repository.zig");
 const Oid = @import("Oid.zig");
+const Tree = @import("Tree.zig");
+const odb = @import("odb.zig");
 const Stat = @import("stat.zig").Stat;
 
 const Index = @This();
@@ -228,6 +230,51 @@ pub fn find(self: *Index, path: []const u8) ?*Entry {
     return null;
 }
 
+/// 平らな一覧から入れ子の tree を作って保存し、ルートの tree の ID を返す。git write-tree 相当
+pub fn writeTree(self: *Index, repo: Repository) !Oid {
+    self.sort();
+    return writeSubtree(self.arena.child_allocator, repo, self.entries.items, 0);
+}
+
+/// `entries` は全部同じディレクトリの下。path の先頭 `prefix_len` バイトがそのディレクトリ名
+fn writeSubtree(
+    allocator: Allocator,
+    repo: Repository,
+    entries: []const Entry,
+    prefix_len: usize,
+) !Oid {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    var children: std.ArrayList(Tree.Entry) = .empty;
+
+    var i: usize = 0;
+    while (i < entries.len) {
+        const rest = entries[i].path[prefix_len..];
+        if (std.mem.indexOfScalar(u8, rest, '/')) |slash| {
+            // サブディレクトリ。同じ名前で始まる entry は並んでいるので、まとめて再帰する
+            const name = rest[0..slash];
+            var j = i + 1;
+            while (j < entries.len and isUnder(entries[j].path[prefix_len..], name)) j += 1;
+            const sub_prefix = prefix_len + slash + 1;
+            const oid = try writeSubtree(allocator, repo, entries[i..j], sub_prefix);
+            try children.append(scratch, .{ .mode = .directory, .name = name, .oid = oid });
+            i = j;
+        } else {
+            const mode = std.enums.fromInt(Tree.Mode, entries[i].mode) orelse
+                return error.CorruptIndex;
+            const oid = entries[i].oid;
+            try children.append(scratch, .{ .mode = mode, .name = rest, .oid = oid });
+            i += 1;
+        }
+    }
+
+    Tree.sort(children.items);
+    var out: std.Io.Writer.Allocating = .init(scratch);
+    try (Tree{ .entries = children.items }).serialize(&out.writer);
+    return odb.write(repo, .tree, out.written());
+}
+
 fn isUnder(path: []const u8, dir: []const u8) bool {
     return path.len > dir.len and std.mem.startsWith(u8, path, dir) and path[dir.len] == '/';
 }
@@ -305,6 +352,24 @@ test "write reproduces git's bytes" {
     try std.testing.expectEqual(2, again.entries.items.len);
     try std.testing.expect(again.remove("hello.txt"));
     try std.testing.expect(!again.remove("hello.txt"));
+}
+
+test "write-tree builds nested trees" {
+    const allocator = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var repo = try Repository.initForTest(allocator, tmp);
+    defer repo.close(allocator);
+
+    var index = init(allocator);
+    defer index.deinit();
+    try index.parse(&from_git);
+    // $ git write-tree  (hello.txt と src/main.zig)
+    try std.testing.expectFmt("d2f3d07c3315c88bc53c35daec28174a76ad33f6", "{f}", .{try index.writeTree(repo)});
+
+    var empty = init(allocator);
+    defer empty.deinit();
+    try std.testing.expectFmt("4b825dc642cb6eb9a060e54bf8d69288fbee4904", "{f}", .{try empty.writeTree(repo)});
 }
 
 test "rejects a damaged file" {
