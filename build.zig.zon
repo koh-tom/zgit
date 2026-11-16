@@ -1,0 +1,11 @@
+.{
+    .name = .zgit,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.17.1",
+    .fingerprint = 0x8b09278ab2a6c29b,
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
