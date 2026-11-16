@@ -16,6 +16,7 @@ const commands = [_]Command{
     command("cat-file", @import("cmd/cat_file.zig")),
     command("ls-tree", @import("cmd/ls_tree.zig")),
     command("write-tree", @import("cmd/write_tree.zig")),
+    command("commit-tree", @import("cmd/commit_tree.zig")),
     .{ .name = "version", .usage = "zgit version", .run = runVersion },
 };
 
@@ -70,6 +71,8 @@ pub fn main(init: std.process.Init) u8 {
 fn describe(err: anyerror) []const u8 {
     return switch (err) {
         error.NotARepository => "not a git repository (or any of the parent directories): .git",
+        error.MissingIdentity => "no user.name or user.email (set them with git config)",
+        error.InvalidDate => "dates in GIT_*_DATE must look like \"1700000000 +0900\"",
         else => @errorName(err),
     };
 }

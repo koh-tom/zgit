@@ -77,7 +77,28 @@ ch06() {
     fsck_clean
 }
 
-chapters=(03 04 05 06)
+ch07() {
+    fresh ch07
+    git init -q -b main .
+    printf 'hello\n' > hello.txt
+    git add hello.txt
+    tree=$("$zgit" write-tree)
+
+    # 同じ tree・作者・日時なら、commit ID まで一致する
+    c1=$("$zgit" commit-tree "$tree" -m "first commit")
+    eq "$c1" "$(git commit-tree "$tree" -m "first commit")" "commit-tree produces the same id as git"
+    eq "$(git cat-file -t "$c1")" commit "git reads zgit commit"
+    eq "$(git log --oneline "$c1")" "${c1:0:7} first commit" "git log shows zgit commit"
+
+    c2=$(git commit-tree "$tree" -p "$c1" -m "second")
+    eq "$("$zgit" cat-file -p "$c2")" "$(git cat-file -p "$c2")" "zgit reads git commit"
+    eq "$("$zgit" ls-tree "$c2")" "$(git ls-tree "$c2")" "ls-tree peels a commit to its tree"
+    c3=$("$zgit" commit-tree "$tree" -p "$c1" -p "$c2" -m "merge")
+    eq "$(git cat-file -p "$c3" | grep -c '^parent ')" 2 "two parents"
+    fsck_clean
+}
+
+chapters=(03 04 05 06 07)
 if [ $# -gt 0 ]; then chapters=("$@"); fi
 for c in "${chapters[@]}"; do
     echo "# chapter $c"

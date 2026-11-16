@@ -5,9 +5,10 @@ const cli = @import("../cli.zig");
 const Repository = @import("../Repository.zig");
 const Oid = @import("../Oid.zig");
 const Tree = @import("../Tree.zig");
+const Commit = @import("../Commit.zig");
 const odb = @import("../odb.zig");
 
-pub const usage = "zgit ls-tree [-r] <tree>";
+pub const usage = "zgit ls-tree [-r] <tree-ish>";
 
 pub fn run(ctx: cli.Context, args: []const []const u8) !void {
     var recursive = false;
@@ -40,7 +41,16 @@ pub fn list(
     };
     defer loaded.deinit(allocator);
 
-    if (loaded.kind != .tree) return cli.fatal("not a tree object", .{});
+    switch (loaded.kind) {
+        .tree => {},
+        // commit を渡されたら、その commit が指す tree を見せる
+        .commit => {
+            var commit = try Commit.parse(allocator, loaded.body);
+            defer commit.deinit(allocator);
+            return list(allocator, out, repo, commit.tree, prefix, recursive);
+        },
+        else => return cli.fatal("not a tree object", .{}),
+    }
 
     var tree = try Tree.parse(allocator, loaded.body);
     defer tree.deinit(allocator);
