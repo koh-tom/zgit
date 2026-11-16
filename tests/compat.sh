@@ -33,7 +33,15 @@ ch03() {
     eq "$(git symbolic-ref HEAD)" refs/heads/main "HEAD points to main"
 }
 
-chapters=(03)
+ch04() {
+    fresh ch04
+    printf 'hello\n' > hello.txt
+    eq "$("$zgit" hash-object hello.txt)" "$(git hash-object hello.txt)" "hash-object agrees"
+    head -c 100000 /dev/urandom > big.bin
+    eq "$("$zgit" hash-object big.bin)" "$(git hash-object big.bin)" "hash-object agrees on binary"
+}
+
+chapters=(03 04)
 if [ $# -gt 0 ]; then chapters=("$@"); fi
 for c in "${chapters[@]}"; do
     echo "# chapter $c"
