@@ -131,7 +131,42 @@ ch08() {
     fsck_clean
 }
 
-chapters=(03 04 05 06 07 08)
+ch09() {
+    fresh ch09
+    git init -q -b main .
+    mkdir -p src/deep
+    printf 'hello\n' > hello.txt
+    printf 'const x = 1;\n' > src/main.zig
+    printf 'deep\n' > src/deep/d.txt
+    printf '#!/bin/sh\n' > run.sh && chmod +x run.sh
+    ln -s hello.txt link
+
+    "$zgit" add hello.txt src run.sh link
+    eq "$("$zgit" ls-files -s)" "$(git ls-files -s)" "ls-files -s agrees (git reads zgit index)"
+    eq "$("$zgit" ls-files --debug)" "$(git ls-files --debug)" "stat data in the index agrees"
+    eq "$(git status --porcelain | sort)" "$(printf 'A  hello.txt\nA  link\nA  run.sh\nA  src/deep/d.txt\nA  src/main.zig')" "git status sees staged files"
+    eq "$("$zgit" write-tree)" "$(git write-tree)" "write-tree from zgit index matches"
+
+    printf 'changed\n' > hello.txt
+    (cd src && "$zgit" add ../hello.txt main.zig)
+    eq "$(git diff --cached --stat | tail -1)" " 5 files changed, 5 insertions(+)" "add from a subdirectory"
+    rm src/deep/d.txt
+    "$zgit" add src
+    eq "$(git ls-files src)" "$(printf 'src/main.zig')" "add a directory drops deleted files"
+
+    git commit -q -m "from git"
+    eq "$("$zgit" ls-files)" "$(git ls-files)" "zgit reads an index with the TREE extension"
+    printf 'more\n' > more.txt && git add more.txt
+    eq "$("$zgit" ls-files --debug)" "$(git ls-files --debug)" "zgit reads what git add wrote"
+    "$zgit" add .
+    eq "$(git status --porcelain)" "A  more.txt" "add . keeps git status consistent"
+    rm more.txt && mkdir more.txt && printf 'x\n' > more.txt/inner
+    "$zgit" add .
+    eq "$("$zgit" ls-files | grep more)" "more.txt/inner" "a file replaced by a directory leaves one entry"
+    fsck_clean
+}
+
+chapters=(03 04 05 06 07 08 09)
 if [ $# -gt 0 ]; then chapters=("$@"); fi
 for c in "${chapters[@]}"; do
     echo "# chapter $c"

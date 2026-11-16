@@ -21,6 +21,8 @@ const commands = [_]Command{
     command("rev-parse", @import("cmd/rev_parse.zig")),
     command("branch", @import("cmd/branch.zig")),
     command("log", @import("cmd/log.zig")),
+    command("ls-files", @import("cmd/ls_files.zig")),
+    command("add", @import("cmd/add.zig")),
     .{ .name = "version", .usage = "zgit version", .run = runVersion },
 };
 
